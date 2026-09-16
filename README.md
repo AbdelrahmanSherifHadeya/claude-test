@@ -47,6 +47,12 @@ cat README.md | python3 scripts/wordcount.py
 To see the cheat sheet, open `site/index.html` in any browser. It is a single file with no
 dependencies, so it works offline and works if you just double click it.
 
+It is also published as a live page you can open from a phone:
+<https://claude.ai/artifact/Sabr4xVKx2xfViNDC3kD9C>
+
+The file in this repo is the source of truth. The live page is a copy of it, so if you
+change the file, the published page does not update on its own.
+
 ## How the git side of this works
 
 If you have never used git, here is the whole idea in four sentences.
