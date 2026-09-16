@@ -40,9 +40,12 @@ and that is a real defect, not a preference.
 
 **3. Does `git log --oneline` read as a sequence of understandable steps?**
 
-Looking for: five commits total. The first, `Create hello world`, was already there
-before this work started; the four above it are new. Each of the four should tell you
-what changed without having to open the diff.
+Looking for: `Create hello world` sits at the bottom, because it was already there before
+any of this started. Everything above it came from this work, and each of those messages
+should tell you what changed without making you open the diff.
+
+Deliberately no expected count here. The number grows every time anyone commits, and a
+checklist that goes stale the moment you use the repo is worse than no checklist.
 
 If no: say which message is vague.
 
