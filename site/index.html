@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Claude Code Day One</title>
+<style>
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-2: #eff1f5;
+  --ink: #15181f;
+  --ink-soft: #565d6e;
+  --ink-faint: #858c9b;
+  --line: #dfe3ea;
+  --line-strong: #c7cddA;
+  --accent: #b4441f;
+  --accent-soft: #fbefe9;
+  --good: #2f6f4f;
+  --warn: #8a5a12;
+  --code-bg: #f2f4f7;
+  --shadow: 0 1px 2px rgba(21, 24, 31, .05), 0 8px 24px -12px rgba(21, 24, 31, .12);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101318;
+    --surface: #171b22;
+    --surface-2: #1e232c;
+    --ink: #e9ecf2;
+    --ink-soft: #a3aab8;
+    --ink-faint: #737b8a;
+    --line: #2a3038;
+    --line-strong: #39414c;
+    --accent: #f08a5f;
+    --accent-soft: #2a1c16;
+    --good: #6fcf97;
+    --warn: #e0b266;
+    --code-bg: #1c212a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #101318;
+  --surface: #171b22;
+  --surface-2: #1e232c;
+  --ink: #e9ecf2;
+  --ink-soft: #a3aab8;
+  --ink-faint: #737b8a;
+  --line: #2a3038;
+  --line-strong: #39414c;
+  --accent: #f08a5f;
+  --accent-soft: #2a1c16;
+  --good: #6fcf97;
+  --warn: #e0b266;
+  --code-bg: #1c212a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 8px 24px -12px rgba(0, 0, 0, .6);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding-inline: 20px;
+  padding-block: 56px 80px;
+}
+
+/* ---------- header ---------- */
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 14px;
+}
+
+h1 {
+  font-size: clamp(34px, 8vw, 52px);
+  line-height: 1.04;
+  letter-spacing: -.03em;
+  font-weight: 800;
+  margin: 0 0 18px;
+  text-wrap: balance;
+}
+
+.lead {
+  font-size: clamp(17px, 2.4vw, 19px);
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 62ch;
+}
+
+.masthead {
+  padding-bottom: 40px;
+  border-bottom: 2px solid var(--ink);
+  margin-bottom: 8px;
+}
+
+/* ---------- sections ---------- */
+
+section { padding-block: 40px; border-bottom: 1px solid var(--line); }
+section:last-of-type { border-bottom: 0; }
+
+h2 {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 20px;
+}
+
+h3 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -.01em;
+  margin: 0 0 8px;
+}
+
+p { margin: 0 0 16px; max-width: 64ch; }
+p:last-child { margin-bottom: 0; }
+
+strong { font-weight: 650; }
+
+code {
+  font-family: var(--font-mono);
+  font-size: .88em;
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: .12em .38em;
+  white-space: nowrap;
+}
+
+/* ---------- capability chips ---------- */
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; padding: 0; list-style: none; }
+
+.chips li {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--ink-soft);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 5px 12px;
+}
+
+/* ---------- two-up comparison ---------- */
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+@media (max-width: 620px) { .split { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 22px;
+  box-shadow: var(--shadow);
+}
+
+.panel .tag {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 4px;
+  margin-bottom: 12px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.panel ul { margin: 0; padding-left: 18px; color: var(--ink-soft); font-size: 15px; }
+.panel li { margin-bottom: 6px; }
+.panel li:last-child { margin-bottom: 0; }
+
+/* ---------- prompt examples ---------- */
+
+.says { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+
+.says li {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  color: var(--ink);
+}
+
+/* ---------- command table ---------- */
+
+.scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+
+table { border-collapse: collapse; width: 100%; font-size: 15px; min-width: 460px; }
+
+th, td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tbody tr:last-child td { border-bottom: 0; }
+
+th {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  font-weight: 600;
+  background: var(--surface-2);
+}
+
+td:first-child { font-family: var(--font-mono); font-size: 13px; color: var(--accent); white-space: nowrap; }
+td:last-child { color: var(--ink-soft); }
+
+/* ---------- numbered sequence ---------- */
+
+.steps { margin: 0; padding: 0; list-style: none; counter-reset: step; }
+
+.steps li {
+  counter-increment: step;
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 14px;
+  padding-block: 14px;
+  border-bottom: 1px dashed var(--line);
+}
+
+.steps li:last-child { border-bottom: 0; }
+
+.steps li::before {
+  content: counter(step, decimal-leading-zero);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  padding-top: 3px;
+}
+
+.steps .what { font-size: 15px; }
+.steps .what span { display: block; color: var(--ink-soft); font-size: 14px; margin-top: 2px; }
+
+/* ---------- callout ---------- */
+
+.note {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px 20px;
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+
+.note strong { color: var(--ink); }
+
+footer {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--ink-faint);
+  line-height: 1.7;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="masthead">
+  <p class="eyebrow">Reference card</p>
+  <h1>Claude Code, day one</h1>
+  <p class="lead">The short version of everything you need on your first day. Keep it open in a tab. Nothing here assumes you have written code before.</p>
+</header>
+
+<section>
+  <h2>What it actually does</h2>
+  <p>Ordinary chat hands you code to copy and paste. Claude Code has hands: it reads and writes real files, runs commands, runs your tests, and drives git and GitHub. You describe the outcome you want in plain English and it goes and does the work in an actual repository.</p>
+  <p>That difference is the whole thing. You are not asking for a snippet, you are asking for a change.</p>
+  <ul class="chips">
+    <li>build from scratch</li>
+    <li>explain code you didn't write</li>
+    <li>fix bugs</li>
+    <li>write tests</li>
+    <li>rename things everywhere</li>
+    <li>review a diff</li>
+    <li>upgrade dependencies</li>
+    <li>write docs</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Cloud or local</h2>
+  <p>Two places to run it. Most people end up using both, for different moments.</p>
+  <div class="split">
+    <div class="panel">
+      <span class="tag">Cloud</span>
+      <h3>In a browser tab</h3>
+      <ul>
+        <li>Nothing to install</li>
+        <li>Runs on a temporary machine at Anthropic</li>
+        <li>Works from a phone</li>
+        <li>Fire off a task and walk away</li>
+        <li>Anything not pushed to GitHub is lost when it shuts down</li>
+      </ul>
+    </div>
+    <div class="panel">
+      <span class="tag">Local</span>
+      <h3>In your terminal</h3>
+      <ul>
+        <li>Install once, then type <code>claude</code></li>
+        <li>Runs on your own machine</li>
+        <li>Sees your real files and your running app</li>
+        <li>Much tighter feedback loop</li>
+        <li>Where most day to day work happens</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>What to say to it</h2>
+  <p>There is no special syntax. Plain English is the interface. Being specific about the outcome beats being technical about the method.</p>
+  <ul class="says">
+    <li>"Explain what this repo does, I didn't write any of it."</li>
+    <li>"Something is wrong with the login flow. Find out what and fix it."</li>
+    <li>"Add a dark mode toggle to the settings page."</li>
+    <li>"Write tests for the file I just changed."</li>
+    <li>"Rename <code>userId</code> to <code>accountId</code> everywhere, carefully."</li>
+    <li>"Walk me through this file line by line. I don't know Python."</li>
+    <li>"Break this on purpose so I can watch the tests catch it."</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Worth knowing early</h2>
+  <div class="scroll">
+    <table>
+      <thead>
+        <tr><th scope="col">Type this</th><th scope="col">What happens</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>/help</td><td>Lists what is available in your setup</td></tr>
+        <tr><td>/clear</td><td>Starts a fresh conversation, forgetting the current one</td></tr>
+        <tr><td>/config</td><td>Settings: theme, model, and other preferences</td></tr>
+        <tr><td>/init</td><td>Writes a CLAUDE.md so Claude remembers how your project works</td></tr>
+        <tr><td>/code-review</td><td>Reads your changes and looks for problems</td></tr>
+        <tr><td>/security-review</td><td>Same idea, focused on security issues</td></tr>
+        <tr><td>/artifacts</td><td>Lists pages you have published, like this one</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p style="margin-top:14px; font-size:14px; color:var(--ink-faint);">The exact list changes depending on your setup, so <code>/help</code> is always the honest answer.</p>
+</section>
+
+<section>
+  <h2>Plan mode</h2>
+  <p>Plan mode makes Claude research first and propose a written plan, then stop and wait for you to approve it before touching a single file.</p>
+  <p>It is worth leaving on while you are new. You get to read what is about to happen and say no, and reading those plans is genuinely how you learn what the tool is capable of.</p>
+  <div class="note">
+    <strong>Ask for the check, not just the work.</strong> A plan that ends with "and then I will verify it" is worth more than one that ends with the change. Ask for something you can run yourself afterwards that tells you pass or fail, so you are never taking the summary on faith.
+  </div>
+</section>
+
+<section>
+  <h2>How the git part works</h2>
+  <p>This genuinely is a sequence, so it is worth learning in order.</p>
+  <ol class="steps">
+    <li><div class="what">Files change on disk<span>You or Claude edit something. Nothing is saved to history yet.</span></div></li>
+    <li><div class="what"><code>git status</code><span>Shows what changed but is not yet saved.</span></div></li>
+    <li><div class="what"><code>git commit</code><span>Saves a point in history, with a message explaining why.</span></div></li>
+    <li><div class="what"><code>git push</code><span>Uploads those commits to GitHub, so they exist off your machine.</span></div></li>
+    <li><div class="what">It appears on GitHub<span>Now it is real, shareable, and survives your laptop dying.</span></div></li>
+  </ol>
+  <p style="margin-top:20px;">A <strong>branch</strong> is a parallel line of history. Working on one means the main version stays untouched until you decide to merge your work in. That is why new work usually starts with a new branch.</p>
+</section>
+
+<section>
+  <h2>When something looks wrong</h2>
+  <p>You do not have to be able to read the code to catch a bad result. Three moves cover most of it:</p>
+  <ol class="steps">
+    <li><div class="what">Run the project's own checks<span>Tests, linters, a verification script. Green or red is an answer that does not depend on anyone's opinion.</span></div></li>
+    <li><div class="what">Ask for a second pass<span><code>/code-review</code> reads the changes with fresh eyes and reports what it finds.</span></div></li>
+    <li><div class="what">Ask about the line you don't understand<span>If part of a change is opaque to you, that is a gap in the explanation, not in you. Ask.</span></div></li>
+  </ol>
+  <div class="note" style="margin-top:22px;">
+    <strong>The one habit worth forming.</strong> "It works" should mean a command was run and passed, not that someone said so. When you ask for a change, ask how you will know it worked. Any honest answer will point at something you can run.
+  </div>
+</section>
+
+<footer>
+  Built during a first Claude Code session.<br>
+  Lives at site/index.html. Edit it, break it, ask for changes.
+</footer>
+
+</div>
+</body>
+</html>
