@@ -40,14 +40,21 @@ and that is a real defect, not a preference.
 
 **3. Does `git log --oneline` read as a sequence of understandable steps?**
 
-Looking for: four commits, each with a message that tells you what changed without
-having to open the diff.
+Looking for: five commits total. The first, `Create hello world`, was already there
+before this work started; the four above it are new. Each of the four should tell you
+what changed without having to open the diff.
 
 If no: say which message is vague.
 
 **4. Is there anything in the diff you do not understand?**
 
-Run `git diff main...hello-claude-101` and skim it.
+```bash
+git fetch origin main
+git diff origin/main...HEAD
+```
+
+The fetch is needed first: `main` exists on GitHub but this clone has never downloaded
+it, so `git diff main...` on its own fails with `unknown revision`.
 
 Looking for: nothing that makes you think "why is that there?"
 
@@ -64,7 +71,9 @@ echo "broken" >> hello-world.txt
 python3 scripts/verify.py
 ```
 
-Expected: the `rename` check goes red and tells you the content changed.
+Expected: **two** checks go red, not one. `rename` reports that the content changed, and
+`git` reports an uncommitted change, because appending to a tracked file also dirties the
+working tree. Exit code 1.
 
 Then put it back:
 

@@ -24,7 +24,10 @@ from html.parser import HTMLParser
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-BRANCH = "hello-claude-101"
+# The git check follows whatever branch you are on and compares it against its
+# own upstream, rather than hardcoding a branch name. A hardcoded name would
+# make this script fail permanently the moment the branch is merged and
+# deleted, which is the outcome the README actively invites.
 
 # The counting fixture and its answers were worked out by hand before the code
 # was written, and they are duplicated in scripts/test_wordcount.py on purpose.
@@ -98,13 +101,20 @@ def repo_path(*parts):
 
 
 def run(args, **kwargs):
-    return subprocess.run(
-        args,
-        cwd=REPO,
-        capture_output=True,
-        text=True,
-        **kwargs,
-    )
+    kwargs.setdefault("timeout", 60)
+    try:
+        return subprocess.run(
+            args,
+            cwd=REPO,
+            capture_output=True,
+            text=True,
+            **kwargs,
+        )
+    except subprocess.TimeoutExpired:
+        # Only the network-touching calls can realistically hit this. Returning
+        # a failed result rather than raising keeps one slow command from
+        # taking down the whole report.
+        return subprocess.CompletedProcess(args, 124, "", "timed out")
 
 
 # --------------------------------------------------------------------------
@@ -120,16 +130,26 @@ def _git_visible_root():
     .claude/settings.local.json do not trip the check. The question being
     answered is "did something unexpected get added to the repo", and a file
     git will never commit was never added to the repo.
+
+    Returns None if git could not answer. That is deliberately different from
+    an empty set: an empty set would silently mean "nothing unexpected found"
+    and turn a broken check into a green one.
+
+    -z is used because git C-quotes and escapes paths containing non-ASCII
+    bytes otherwise, which would make the name this reports impossible to
+    paste back into EXPECTED_ROOT.
     """
     names = set()
     for args in (
-        ["git", "ls-files"],
-        ["git", "ls-files", "--others", "--exclude-standard"],
+        ["git", "ls-files", "-z"],
+        ["git", "ls-files", "-z", "--others", "--exclude-standard"],
     ):
-        for line in run(args).stdout.splitlines():
-            line = line.strip()
-            if line:
-                names.add(line.split("/", 1)[0])
+        proc = run(args)
+        if proc.returncode != 0:
+            return None
+        for entry in proc.stdout.split("\0"):
+            if entry:
+                names.add(entry.split("/", 1)[0])
     return names
 
 
@@ -145,7 +165,18 @@ def check_files():
             fix="restore the missing file(s), or ask Claude to recreate them",
         )
 
-    extra = sorted(_git_visible_root() - EXPECTED_ROOT)
+    visible = _git_visible_root()
+    if visible is None:
+        return Result(
+            "files",
+            False,
+            "git could not list the repo contents",
+            expected="git answers `git ls-files`",
+            found="git exited with an error, so the unexpected-file check could not run",
+            fix="check you are inside the git repo, then run `git status` to see what git says",
+        )
+
+    extra = sorted(visible - EXPECTED_ROOT)
     if extra:
         return Result(
             "files",
@@ -298,6 +329,16 @@ def check_cli():
             )
 
         from_stdin = run([sys.executable, script], input=FIXTURE)
+        if from_stdin.returncode != 0:
+            return Result(
+                "cli",
+                False,
+                "wordcount.py failed when reading stdin",
+                expected="exit code 0 when text is piped in",
+                found=(from_stdin.stderr or "no stderr").strip(),
+                fix="run `cat README.md | python3 scripts/wordcount.py` and read the error",
+            )
+
         stdin_counts = _parse_counts(from_stdin.stdout)
         if stdin_counts != counts:
             return Result(
@@ -318,6 +359,25 @@ def check_cli():
     )
 
 
+# Anything a stylesheet can use to go and fetch something: url(...) in any
+# property, and @import in either of its two spellings.
+CSS_FETCH = re.compile(
+    r"""(?:@import\s+(?:url\()?|url\()\s*['"]?([^'")\s]+)""",
+    re.IGNORECASE,
+)
+
+
+def _is_outside(ref):
+    """True if this reference makes the browser look outside this one file.
+
+    A data: URI carries its own bytes, and a bare fragment stays on the page.
+    Everything else, relative paths included, means the file is no longer
+    self-contained: move it to another machine on its own and it breaks.
+    """
+    ref = ref.strip().strip("'\"")
+    return bool(ref) and not ref.startswith(("data:", "#"))
+
+
 class PageParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -326,6 +386,7 @@ class PageParser(HTMLParser):
         self.has_viewport = False
         self.title = ""
         self._in_title = False
+        self._in_style = False
         self.external = []
 
     def handle_starttag(self, tag, attrs):
@@ -337,24 +398,39 @@ class PageParser(HTMLParser):
         if tag == "title":
             self._in_title = True
 
+        if tag == "style":
+            self._in_style = True
+
         if tag == "meta" and (attrs.get("name") or "").lower() == "viewport":
             self.has_viewport = True
 
         attr = RESOURCE_ATTRS.get(tag)
         if attr:
             value = (attrs.get(attr) or "").strip()
-            if value.startswith(("http://", "https://", "//")):
+            if _is_outside(value):
                 self.external.append(f"<{tag} {attr}={value}>")
+
+        # A url(...) hiding in an inline style attribute fetches just as hard
+        # as one in a <style> block.
+        for ref in CSS_FETCH.findall(attrs.get("style") or ""):
+            if _is_outside(ref):
+                self.external.append(f"<{tag} style=...{ref}>")
 
     def handle_endtag(self, tag):
         if tag in BALANCED_TAGS:
             self.closed[tag] = self.closed.get(tag, 0) + 1
         if tag == "title":
             self._in_title = False
+        if tag == "style":
+            self._in_style = False
 
     def handle_data(self, data):
         if self._in_title:
             self.title += data
+        if self._in_style:
+            for ref in CSS_FETCH.findall(data):
+                if _is_outside(ref):
+                    self.external.append(f"css {ref}")
 
 
 def check_html():
@@ -377,11 +453,14 @@ def check_html():
         parser.feed(markup)
         parser.close()
     except Exception as error:  # noqa: BLE001 - any parse blow-up is a failure
+        # Note: html.parser is lenient and almost never raises, so this is a
+        # backstop, not a validator. The real structural check is the tag
+        # balance below, and it only covers the names in BALANCED_TAGS.
         return Result(
             "html",
             False,
-            "the page could not be parsed",
-            expected="valid HTML",
+            "the page could not be read",
+            expected="the file can be parsed end to end",
             found=f"{type(error).__name__}: {error}",
             fix="ask Claude to look at site/index.html",
         )
@@ -398,7 +477,7 @@ def check_html():
             "html",
             False,
             "unbalanced tags",
-            expected="every structural tag is closed exactly once",
+            expected="each structural tag (div, section, table, ...) closed as often as opened",
             found="; ".join(unbalanced),
             fix="usually a forgotten closing tag; ask Claude to fix site/index.html",
         )
@@ -427,12 +506,12 @@ def check_html():
         return Result(
             "html",
             False,
-            f"{len(parser.external)} external resource(s)",
-            expected="no external fetches, so the page works offline",
+            f"{len(parser.external)} reference(s) outside the file",
+            expected="nothing fetched from outside this one file, so it works offline",
             found=", ".join(parser.external),
             fix=(
-                "inline the resource, or embed it as a data: URI, so the single "
-                "file stays self-contained"
+                "inline the resource, or embed it as a data: URI, so the page "
+                "stays a single self-contained file"
             ),
         )
 
@@ -445,14 +524,14 @@ def check_html():
 
 def check_git():
     branch = run(["git", "rev-parse", "--abbrev-ref", "HEAD"]).stdout.strip()
-    if branch != BRANCH:
+    if not branch or branch == "HEAD":
         return Result(
             "git",
             False,
-            f"on branch {branch}",
-            expected=f"on branch {BRANCH}",
-            found=f"on branch {branch}",
-            fix=f"run `git checkout {BRANCH}`",
+            "not on a branch",
+            expected="a branch is checked out",
+            found="detached HEAD" if branch == "HEAD" else "git gave no branch name",
+            fix="run `git checkout <branch-name>` to get back onto a branch",
         )
 
     dirty = run(["git", "status", "--porcelain"]).stdout.strip()
@@ -466,37 +545,65 @@ def check_git():
             fix="run `git status` to see them, then commit or discard them",
         )
 
-    remote_ref = f"refs/remotes/origin/{BRANCH}"
-    remote = run(["git", "rev-parse", "--verify", "--quiet", remote_ref])
-    if remote.returncode != 0:
+    upstream = run(
+        ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"]
+    )
+    if upstream.returncode != 0:
         return Result(
             "git",
             False,
-            "no local record of the remote branch",
-            expected=f"origin/{BRANCH} is known locally",
-            found=f"{remote_ref} not found",
-            fix=f"run `git fetch origin {BRANCH}`",
+            "this branch has never been pushed",
+            expected=f"{branch} tracks a branch on the remote",
+            found="no upstream is set for it",
+            fix=f"run `git push -u origin {branch}`",
         )
 
+    upstream_name = upstream.stdout.strip()
+    remote_name, _, remote_branch = upstream_name.partition("/")
+    if not remote_branch:
+        remote_name, remote_branch = "origin", branch
+
     local_head = run(["git", "rev-parse", "HEAD"]).stdout.strip()
-    remote_head = remote.stdout.strip()
+
+    # Ask the remote directly when we can reach it. refs/remotes/... is only as
+    # fresh as your last fetch, so trusting it can report "in sync" while the
+    # server is several commits ahead. That is exactly the kind of false
+    # assurance this script exists to avoid, so when we do fall back to the
+    # cached ref, the message says so rather than claiming to know.
+    live = run(["git", "ls-remote", remote_name, f"refs/heads/{remote_branch}"])
+    if live.returncode == 0 and live.stdout.strip():
+        remote_head = live.stdout.split()[0]
+        source = f"{remote_name} as of right now"
+    else:
+        cached = run(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/remotes/{upstream_name}"]
+        )
+        if cached.returncode != 0:
+            return Result(
+                "git",
+                False,
+                "cannot tell what the remote has",
+                expected=f"{upstream_name} is reachable, or at least known locally",
+                found="`git ls-remote` failed and there is no local copy of the ref",
+                fix=f"check your connection, then run `git fetch {remote_name}`",
+            )
+        remote_head = cached.stdout.strip()
+        source = f"your last fetch of {upstream_name}"
+
     if local_head != remote_head:
         return Result(
             "git",
             False,
-            "local and GitHub disagree",
-            expected=f"HEAD matches origin/{BRANCH}",
-            found=f"local {local_head[:9]} vs remote {remote_head[:9]}",
-            fix=(
-                f"run `git push -u origin {BRANCH}` if you are ahead, or "
-                f"`git pull origin {BRANCH}` if you are behind"
-            ),
+            "local and remote disagree",
+            expected=f"HEAD matches {upstream_name}",
+            found=f"local {local_head[:9]} vs remote {remote_head[:9]}, per {source}",
+            fix="run `git push` if you are ahead, or `git pull` if you are behind",
         )
 
     return Result(
         "git",
         True,
-        f"on {BRANCH}, clean, in sync with GitHub ({local_head[:9]})",
+        f"on {branch}, clean, matches {source} ({local_head[:9]})",
     )
 
 

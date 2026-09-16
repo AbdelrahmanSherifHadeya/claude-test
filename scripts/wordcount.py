@@ -46,12 +46,18 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
 
-    if args.path:
+    # `is not None`, not a truthiness test: argparse sets path to None when the
+    # argument is omitted, but to "" when someone passes an empty string. A
+    # truthiness test treats those the same and silently waits on stdin, which
+    # looks exactly like a hang.
+    if args.path is not None:
         try:
             with open(args.path, "r", encoding="utf-8") as handle:
                 text = handle.read()
-        except OSError as error:
-            print(f"wordcount: {error}", file=sys.stderr)
+        except (OSError, UnicodeDecodeError) as error:
+            # UnicodeDecodeError subclasses ValueError, not OSError, so it needs
+            # naming explicitly or a binary file crashes with a raw traceback.
+            print(f"wordcount: {args.path!r}: {error}", file=sys.stderr)
             return 1
     else:
         text = sys.stdin.read()
